@@ -14,7 +14,7 @@ import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
 
-import java.util.*;
+import java.util.*; // Wildcard import for Collections, Comparator, HashMap, LinkedList, List, Map, PriorityQueue, StringJoiner
 
 /**
  * Processes bazaar data to find profitable items based on user configuration.
@@ -30,12 +30,13 @@ public class BazaarProcessor {
         ROMAN_MAP.put(4, "IV"); ROMAN_MAP.put(5, "V"); ROMAN_MAP.put(6, "VI");
         ROMAN_MAP.put(7, "VII"); ROMAN_MAP.put(8, "VIII"); ROMAN_MAP.put(9, "IX");
         ROMAN_MAP.put(10, "X");
+        // Add more if higher levels become common in Bazaar
     }
     // --- End Roman numeral map ---
 
 
     // --- Base Comparator (Natural Order) for PriorityQueue (Min-Heap) ---
-    // This comparator defines which element is "smaller" (lower profit/percentage)
+    // Defines which element is "smaller" (lower profit/percentage) for the queue.
     private static Comparator<ProfitableItem> getBaseComparator(String sortBy) {
         if (sortBy == null) sortBy = "profit";
         switch (sortBy.trim().toLowerCase()) {
@@ -63,36 +64,49 @@ public class BazaarProcessor {
     public List<ProfitableItem> findProfitableItemsStatic(JsonObject bazaarData, Map<String, String> itemNamesMap, String modName) {
 
         // --- Initial Checks & Setup ---
-        if (!Oronyx.modEnabled) return Collections.emptyList(); // Use Collections.emptyList() for empty returns
+        if (!Oronyx.modEnabled) return Collections.emptyList();
         if (bazaarData == null || !bazaarData.has("products") || !bazaarData.get("products").isJsonObject()) return Collections.emptyList();
-        if (itemNamesMap == null) return Collections.emptyList();
+        if (itemNamesMap == null) {
+            Oronyx.LOGGER.error("Item name map is null. Cannot process items accurately.");
+            return Collections.emptyList();
+        }
 
         JsonObject products = bazaarData.getAsJsonObject("products");
         long currentPurse = ScoreboardReader.getPlayerPurse();
-        Oronyx.LOGGER.debug("Starting Bazaar Scan. Current Purse: {}. FilterByMaxPurse: {}. DisplayLimit: {}",
+        Oronyx.LOGGER.debug("Starting Bazaar Scan. Current Purse: {}. FilterByMaxPurse: {}. DisplayLimit: {}. BlockUlt: {}. BlockNorm: {}. BlacklistEnabled: {}",
                 (currentPurse == -1 ? "Not Found" : String.format("%,d", currentPurse)),
                 Oronyx.filterByMaxPlayerPurse,
-                Oronyx.displayLimit);
+                Oronyx.displayLimit,
+                Oronyx.blockUltimateEnchants,
+                Oronyx.blockNormalEnchants,
+                Oronyx.enableBlacklistFilter);
 
         // --- Overall Purse Check ---
         if (Oronyx.minPurse > 0 && currentPurse != -1 && currentPurse < Oronyx.minPurse) {
-            /* Log + return */ return Collections.emptyList();}
+            Oronyx.LOGGER.info("Purse ({}) is below minimum requirement ({}), skipping bazaar check.", String.format("%,d", currentPurse), String.format("%,d", Oronyx.minPurse));
+            if (Oronyx.showEvaluatingMessages) {
+                ChatUtils.sendModMessage(EnumChatFormatting.YELLOW + "Purse too low (" + String.format("%,d", currentPurse) + "). Need " + String.format("%,d", Oronyx.minPurse) + ".");
+            }
+            return Collections.emptyList();
+        }
 
         int itemsProcessed = 0;
         int itemsPassedInitialFilters = 0;
         int itemsPassedAllFilters = 0;
 
-        // --- Setup Result Collection (PriorityQueue or List) ---
-        PriorityQueue<ProfitableItem> topItemsQueue = null; // For limited results
+        // --- Setup Result Collection (Optimization: Use PriorityQueue if limited) ---
+        PriorityQueue<ProfitableItem> topItemsQueue = null; // For limited results (Top N)
         List<ProfitableItem> unlimitedResults = null;      // For unlimited results
-        Comparator<ProfitableItem> baseComparator = getBaseComparator(Oronyx.sortBy); // Get comparator for queue/sorting
+        Comparator<ProfitableItem> baseComparator = getBaseComparator(Oronyx.sortBy); // Comparator for queue/sorting (natural order)
 
         if (Oronyx.displayLimit > 0) {
-            // Use PriorityQueue (Min-Heap) with the base comparator
+            // Use PriorityQueue (Min-Heap) to efficiently keep track of the top N items
             topItemsQueue = new PriorityQueue<>(Oronyx.displayLimit + 1, baseComparator);
+            Oronyx.LOGGER.trace("Using PriorityQueue for result collection (Limit: {}).", Oronyx.displayLimit);
         } else {
             // No limit, use a standard list
             unlimitedResults = new ArrayList<>();
+            Oronyx.LOGGER.trace("Using ArrayList for result collection (No limit).");
         }
         // --- ---
 
@@ -115,14 +129,14 @@ public class BazaarProcessor {
             long totalBuyVolume = getTotalVolume(buySummary);
             long totalSellVolume = getTotalVolume(sellSummary);
 
-            // --- **Early Filtering Stage 1 (Before Profit Calc)** ---
+            // --- **Optimization: Early Filtering Stage 1 (Checks before heavier calculations)** ---
             if (ourSellPrice <= ourBuyPrice) continue; // Basic profitability
             if ((Oronyx.minBuyVolume > 0 && totalBuyVolume < Oronyx.minBuyVolume) || (Oronyx.minSellVolume > 0 && totalSellVolume < Oronyx.minSellVolume)) continue; // Volume
             if ((Oronyx.minPricePerUnitBuy > 0 && ourBuyPrice < Oronyx.minPricePerUnitBuy) || (Oronyx.maxPricePerUnitBuy > 0 && ourBuyPrice > Oronyx.maxPricePerUnitBuy)) continue; // Buy Price Range
             if (Oronyx.maxPricePerUnitSell > 0 && ourSellPrice > Oronyx.maxPricePerUnitSell) continue; // Sell Price Max
             if (currentPurse != -1) {
                 if (Oronyx.filterByMaxPlayerPurse && ourBuyPrice > currentPurse) continue; // Max Player Purse
-                if (Oronyx.maxSpentPerOrder > 0 && ourBuyPrice > Oronyx.maxSpentPerOrder) continue; // Basic Max Spend (single item cost)
+                if (Oronyx.maxSpentPerOrder > 0 && ourBuyPrice > Oronyx.maxSpentPerOrder) continue; // Basic Max Spend (single item cost > limit)
             }
             // --- End Early Filtering Stage 1 ---
 
@@ -132,32 +146,53 @@ public class BazaarProcessor {
             double taxRate = Math.max(0.0, Oronyx.tax - 1.0);
             double receivedSellPrice = ourSellPrice * (1.0 - taxRate);
             double potentialProfitPerItem = receivedSellPrice - ourBuyPrice;
-            if (potentialProfitPerItem <= 0) continue; // Check profit after tax
+            if (potentialProfitPerItem <= 0) continue; // Check profit *after* tax calculation
             double potentialProfitPercentage = (ourBuyPrice <= 0) ? Double.POSITIVE_INFINITY : (potentialProfitPerItem / ourBuyPrice) * 100.0;
 
-            // --- **Early Filtering Stage 2 (Profit Based)** ---
+            // --- **Optimization: Early Filtering Stage 2 (Profit & Advanced Spend)** ---
             if ((Oronyx.minProfit > 0 && potentialProfitPerItem < Oronyx.minProfit) || (Oronyx.maxProfit > 0 && potentialProfitPerItem > Oronyx.maxProfit)) continue; // Profit Range
             if (Oronyx.minProfitPercentage > 0 && potentialProfitPercentage < Oronyx.minProfitPercentage) continue; // Min Profit Percentage
-            // Advanced Max Spend Check (can we afford min volume within max spend?)
+            if (Oronyx.maxProfitPercentage > 0 && potentialProfitPercentage > Oronyx.maxProfitPercentage) continue; // Max Profit Percentage filter
+            // Advanced Max Spend Check
             if (currentPurse != -1 && Oronyx.maxSpentPerOrder > 0 && ourBuyPrice > 0) {
-                long affordableQuantity = Math.min(
-                        (long)(Oronyx.maxSpentPerOrder / ourBuyPrice), // Max by spend limit
-                        (long)(currentPurse / ourBuyPrice)           // Max by current purse
-                );
-                if (affordableQuantity < 1) continue; // Should have been caught earlier, but double check
-                // Optional: if (Oronyx.minBuyVolume > 0 && affordableQuantity < Oronyx.minBuyVolume) continue;
+                long affordableQuantity = Math.min((long)(Oronyx.maxSpentPerOrder / ourBuyPrice), (long)(currentPurse / ourBuyPrice));
+                if (affordableQuantity < 1) continue;
             }
             // --- End Early Filtering Stage 2 ---
 
 
+            // --- Determine Item Name (Needed for Enchant/Blacklist Filters) ---
+            String itemName;
+            boolean isEnchantment = false;
+            boolean isUltimate = false;
+            String generatedEnchantName = generateEnchantmentName(productId);
+            if (generatedEnchantName != null) {
+                itemName = generatedEnchantName;
+                isEnchantment = true;
+                isUltimate = productId.startsWith("ENCHANTMENT_ULTIMATE_");
+            } else {
+                itemName = itemNamesMap.getOrDefault(productId, productId + " (Unknown Name)");
+            }
+            String lowerItemName = itemName.toLowerCase(); // Use lowercase for blacklist check
+
+            // --- **Optimization: Early Filtering Stage 3 (Type Based)** ---
+            // Block Enchantments Filter
+            if (isEnchantment) {
+                if (isUltimate && Oronyx.blockUltimateEnchants) {
+                    Oronyx.LOGGER.trace("Skipping '{}': Blocked Ultimate Enchant", itemName); continue;
+                }
+                if (!isUltimate && Oronyx.blockNormalEnchants) {
+                    Oronyx.LOGGER.trace("Skipping '{}': Blocked Normal Enchant", itemName); continue;
+                }
+            }
+            // Blacklist Filter
+            if (Oronyx.enableBlacklistFilter && Oronyx.blacklistSet.contains(lowerItemName)) { // Use enableBlacklistFilter
+                Oronyx.LOGGER.debug("Skipping '{}': Item is blacklisted", itemName); continue;
+            }
+            // --- End Early Filtering Stage 3 ---
+
             // --- Item passed ALL filters ---
             itemsPassedAllFilters++;
-
-            // --- Determine Item Name (Only for passed items) ---
-            String itemName;
-            String generatedEnchantName = generateEnchantmentName(productId);
-            itemName = (generatedEnchantName != null) ? generatedEnchantName : itemNamesMap.getOrDefault(productId, productId + " (Unknown Name)");
-
             Oronyx.LOGGER.trace("Item '{}' passed all filters.", itemName);
 
             // --- Create ProfitableItem Object ---
@@ -167,17 +202,16 @@ public class BazaarProcessor {
                     totalBuyVolume, totalSellVolume
             );
 
-            // --- Add to appropriate collection (Queue or List) ---
-            if (topItemsQueue != null) { // Using PriorityQueue (displayLimit > 0)
-                topItemsQueue.offer(item); // Add item to the min-heap
-                // If the queue size is now greater than the limit, remove the smallest element
+            // --- Add to appropriate collection (Optimization: Add to Queue/List) ---
+            if (topItemsQueue != null) { // Using PriorityQueue
+                topItemsQueue.offer(item);
                 if (topItemsQueue.size() > Oronyx.displayLimit) {
-                    topItemsQueue.poll(); // Removes the head (element with lowest profit/percentage)
+                    topItemsQueue.poll();
                 }
-            } else { // Using ArrayList (displayLimit <= 0)
+            } else { // Using ArrayList
                 unlimitedResults.add(item);
             }
-            // --- No chat message sending inside the loop ---
+            // --- Chat message sending moved after this loop ---
 
         } // End loop through products
 
@@ -186,24 +220,25 @@ public class BazaarProcessor {
         // --- Finalize results list ---
         List<ProfitableItem> finalItemList;
         if (topItemsQueue != null) { // Results came from PriorityQueue
-            // Convert queue to a list. Order will be arbitrary at this point.
             finalItemList = new LinkedList<>(topItemsQueue);
-            // Sort the final list based on the desired order (best first)
-            // Use reversed() on the base comparator used for the min-heap.
-            finalItemList.sort(baseComparator.reversed());
+            if (baseComparator != null) {
+                finalItemList.sort(baseComparator.reversed()); // Sort best first
+            }
             Oronyx.LOGGER.info("Final list size (from PriorityQueue, Limit: {}): {}", Oronyx.displayLimit, finalItemList.size());
         } else { // Results came from the unlimited list
-            // Sort the full list based on the desired order (best first)
-            unlimitedResults.sort(baseComparator.reversed());
+            if (baseComparator != null) {
+                unlimitedResults.sort(baseComparator.reversed()); // Sort best first
+            }
             finalItemList = unlimitedResults;
             Oronyx.LOGGER.info("Final list size (unlimited): {}", finalItemList.size());
         }
+
 
         // --- Send Chat Messages (Iterate over the final sorted and limited list) ---
         if (Oronyx.showEvaluatingMessages) {
             Oronyx.LOGGER.debug("Sending {} evaluating messages to chat.", finalItemList.size());
             for (ProfitableItem profitableItem : finalItemList) {
-                // Get data from the final item object
+                // Get data from the item object
                 String itemName = profitableItem.getItemName();
                 double ourBuyPrice = profitableItem.getBuyPrice();
                 double ourSellPrice = profitableItem.getSellPrice();
@@ -220,21 +255,47 @@ public class BazaarProcessor {
                 String formattedProfit = NumberUtils.formatNumberShort(potentialProfitPerItem);
                 String formattedProfitPercent = String.format("%.1f%%", potentialProfitPercentage);
 
-                // Build message string with the colors from user's code
-                String evalMsgString = String.format("%s[%s]%s Evaluating: %s%s %s| %sBuy: %s%s %s| %sSell: %s%s %s| %sVol(B/S): %s%s%s/%s%s %s| %sProfit: %s%s %s(%s)",
-                        EnumChatFormatting.GOLD, modName, EnumChatFormatting.GRAY,                  // Prefix §6[Oronyx]§7 Evaluating:
-                        EnumChatFormatting.YELLOW, itemName,                                        // Item Name §e{ItemName}
-                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.WHITE, formattedBuyPrice, // Separator §8| §7Buy:§f{BuyP} <-- Changed Buy color to White
-                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.RED, formattedSellPrice, // Separator §8| §7Sell:§c{SellP}
-                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.WHITE, formattedBuyVol, EnumChatFormatting.GRAY, EnumChatFormatting.RED, formattedSellVol, // Separator §8| §7Vol(B/S):§f{BuyV}§7/§c{SellV} <-- Changed SellVol color to Red
-                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.YELLOW, formattedProfit, // Separator §8| §7Profit:§e{Profit}
-                        EnumChatFormatting.GOLD, formattedProfitPercent                               // Percentage §6({Profit%})
-                );
+                // --- Build Clickable Chat Component with 2 parts ---
+                // 1. Prefix
+                IChatComponent prefixComponent = new ChatComponentText(EnumChatFormatting.GOLD + "[" + modName + "]" + EnumChatFormatting.GRAY + " Evaluating: ");
 
-                // Create components and events
-                IChatComponent chatComponent = getIChatComponent(evalMsgString, itemName);
+                // 2. Item Name Part (Clickable -> /bz)
+                IChatComponent itemNameComponent = new ChatComponentText(EnumChatFormatting.YELLOW + itemName);
+                ChatStyle itemNameStyle = new ChatStyle();
+                String bzCommand = "/bz " + itemName;
+                // !! WARNING: Using RUN_COMMAND !!
+                itemNameStyle.setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, bzCommand));
+                itemNameStyle.setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                        new ChatComponentText(EnumChatFormatting.YELLOW + "Click to " + EnumChatFormatting.RED + "Run" + EnumChatFormatting.YELLOW + " Command:\n" + EnumChatFormatting.GRAY + bzCommand)));
+                itemNameComponent.setChatStyle(itemNameStyle);
 
-                ChatUtils.sendMessage(chatComponent);
+                // 3. Details Part (Not clickable) - Includes spaces for separation
+                String detailsFormat = " %s| %sBuy: %s%s %s| %sSell: %s%s %s| %sVol(B/S): %s%s%s/%s%s %s| %sProfit: %s%s %s(%s) ";
+                IChatComponent detailsComponent = new ChatComponentText(String.format(detailsFormat,
+                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.WHITE, formattedBuyPrice, // Buy White
+                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.RED, formattedSellPrice,   // Sell Red
+                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.WHITE, formattedBuyVol, EnumChatFormatting.GRAY, EnumChatFormatting.RED, formattedSellVol,   // Vol Buy White / Sell Red
+                        EnumChatFormatting.DARK_GRAY, EnumChatFormatting.GRAY, EnumChatFormatting.YELLOW, formattedProfit,  // Profit Yellow
+                        EnumChatFormatting.GOLD, formattedProfitPercent
+                ));
+
+                // 4. Blacklist Button Part (Clickable -> /oronyx blacklist add)
+                IChatComponent blacklistComponent = new ChatComponentText(EnumChatFormatting.RED + "[Blacklist]");
+                ChatStyle blacklistStyle = new ChatStyle();
+                String blacklistCommand = "/oronyx blacklist add " + itemName;
+                // !! WARNING: Using RUN_COMMAND !!
+                blacklistStyle.setChatClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, blacklistCommand));
+                blacklistStyle.setChatHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                        new ChatComponentText(EnumChatFormatting.YELLOW + "Click to " + EnumChatFormatting.RED + "Run" + EnumChatFormatting.YELLOW + " Command:\n" + EnumChatFormatting.GRAY + blacklistCommand)));
+                blacklistComponent.setChatStyle(blacklistStyle);
+
+                // 5. Combine all parts
+                prefixComponent.appendSibling(itemNameComponent);
+                prefixComponent.appendSibling(detailsComponent);
+                prefixComponent.appendSibling(blacklistComponent);
+
+                // 6. Send the combined component
+                ChatUtils.sendMessage(prefixComponent);
             }
         }
         // --- End Send Chat Messages ---
@@ -242,19 +303,6 @@ public class BazaarProcessor {
         return finalItemList; // Return the final, sorted, and potentially limited list
     }
 
-    private static IChatComponent getIChatComponent(String evalMsgString, String itemName) {
-        IChatComponent chatComponent = new ChatComponentText(evalMsgString);
-        ChatStyle style = new ChatStyle();
-        String commandToRun = "/bz " + itemName;
-        // !! WARNING: Using RUN_COMMAND !!
-        ClickEvent clickEvent = new ClickEvent(ClickEvent.Action.RUN_COMMAND, commandToRun);
-        style.setChatClickEvent(clickEvent);
-        IChatComponent hoverText = new ChatComponentText(EnumChatFormatting.YELLOW + "Click to " + EnumChatFormatting.RED + "Run" + EnumChatFormatting.YELLOW + " Command:\n" + EnumChatFormatting.GRAY + commandToRun);
-        HoverEvent hoverEvent = new HoverEvent(HoverEvent.Action.SHOW_TEXT, hoverText);
-        style.setChatHoverEvent(hoverEvent);
-        chatComponent.setChatStyle(style);
-        return chatComponent;
-    }
 
     // --- Helper Methods for Enchantment Name Generation ---
     /** Generates formatted enchantment name from ID or returns null. */
@@ -338,13 +386,6 @@ public class BazaarProcessor {
             }
         }
         return total;
-    }
-
-    // --- Helper Method for Sorting ---
-    /** Gets the appropriate Comparator for sorting (natural order for queue, reversed for final list). */
-    private static Comparator<ProfitableItem> getSortComparator(String sortBy) {
-        // This now returns the comparator for the FINAL list (best first)
-        return getBaseComparator(sortBy).reversed();
     }
 
 } // End of BazaarProcessor class
