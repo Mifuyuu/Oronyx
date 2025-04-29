@@ -1,0 +1,16 @@
+[
+  {
+    "modid": "oronyx",
+    "name": "Oronyx",
+    "description": "Hypixel Skyblock Bazaar profit evaluation tool.",
+    "version": "${version}",
+    "mcversion": "${mcversion}",
+    "url": "",
+    "updateUrl": "",
+    "authorList": ["KhaiThoMx, _Tsuzaki"],
+    "credits": "Hypixel API",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": []
+  }
+]
