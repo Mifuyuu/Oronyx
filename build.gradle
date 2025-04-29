@@ -27,7 +27,7 @@ compileJava {
     targetCompatibility = '1.8'
 }
 
-version = "1.1.4-Beta"
+version = "1.1.6-Beta"
 group= "me.khaithomx.oronyx" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
 archivesBaseName = "Oronyx"
 

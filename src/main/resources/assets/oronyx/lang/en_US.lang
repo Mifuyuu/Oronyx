@@ -1,0 +1,52 @@
+# Oronyx Configuration GUI Labels
+
+# --- Category Names ---
+oronyx.configcategory.General=General Settings
+oronyx.configcategory.Profit_Criteria=Profit Criteria
+oronyx.configcategory.Price_Filters=Price Filters
+oronyx.configcategory.Volume_Filters=Volume Filters
+oronyx.configcategory.Purse_Settings=Purse Settings
+oronyx.configcategory.Order_Filtering=Order & Filtering Settings
+oronyx.configcategory.API_Settings=API Settings
+
+# --- General ---
+oronyx.config.General.modEnabled.name=Enable Mod
+oronyx.config.General.displayLimit.name=Display Limit
+oronyx.config.General.showEvaluatingMessages.name=Show Evaluating Messages
+oronyx.config.General.delay.name=Update Delay
+
+# --- Profit Criteria ---
+oronyx.config.Profit_Criteria.minProfit.name=Minimum Profit
+oronyx.config.Profit_Criteria.maxProfit.name=Maximum Profit (0=Off)
+oronyx.config.Profit_Criteria.minProfitPercentage.name=Minimum Profit %
+oronyx.config.Profit_Criteria.maxProfitPercentage.name=Maximum Profit % (0=Off)
+
+# --- Price Filters ---
+oronyx.config.Price_Filters.minPricePerUnitBuy.name=Min Buy Price/Unit
+oronyx.config.Price_Filters.maxPricePerUnitBuy.name=Max Buy Price/Unit (0=Off)
+oronyx.config.Price_Filters.maxPricePerUnitSell.name=Max Sell Price/Unit (0=Off)
+
+# --- Volume Filters ---
+oronyx.config.Volume_Filters.minBuyVolume.name=Min Buy Volume
+oronyx.config.Volume_Filters.minSellVolume.name=Min Sell Volume
+
+# --- Purse Settings ---
+oronyx.config.Purse_Settings.minPurse.name=Min Required Purse (0=Off)
+oronyx.config.Purse_Settings.maxSpentPerOrder.name=Max Spend / Order (0=Off)
+oronyx.config.Purse_Settings.filterByMaxPlayerPurse.name=Filter if Price > Purse
+
+# --- Order & Filtering ---
+oronyx.config.Order_Filtering.sortBy.name=Sort Results By
+oronyx.config.Order_Filtering.blockUltimateEnchants.name=Block Ultimate Enchants
+oronyx.config.Order_Filtering.blockNormalEnchants.name=Block Normal Enchants
+oronyx.config.Order_Filtering.enableBlacklistFilter.name=Enable Blacklist Filter
+
+# --- API Settings ---
+oronyx.config.API_Settings.bazaarUrl.name=Bazaar API URL
+oronyx.config.API_Settings.itemListUrl.name=Item List API URL
+oronyx.config.API_Settings.tax.name=Bazaar Tax Multiplier
+
+# --- Tooltips (Optional - ใช้ key format .tooltip) ---
+oronyx.config.General.delay.tooltip=How often the mod checks the Bazaar API. Use suffixes like s, m, h. Minimum 5s.
+oronyx.config.API_Settings.tax.tooltip=Example: 1.01125 means 1.125% tax is deducted from sell price. Must be >= 1.0.
+oronyx.config.Order_Filtering.enableBlacklistFilter.tooltip=If enabled, items listed in the blacklist (managed via /oronyx command) will be hidden.

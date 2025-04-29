@@ -6,10 +6,10 @@ import me.khaithomx.oronyx.bazaar.ProfitableItem;
 import me.khaithomx.oronyx.config.ModConfig;
 import me.khaithomx.oronyx.handler.ClientTickHandler;
 import me.khaithomx.oronyx.handler.KeyInputHandler;
-import me.khaithomx.oronyx.command.OronyxCommand; // <-- Import Command Class
+import me.khaithomx.oronyx.command.OronyxCommand;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.client.ClientCommandHandler; // <-- Import Command Handler Registry
+import net.minecraftforge.client.ClientCommandHandler;
 import net.minecraftforge.fml.client.registry.ClientRegistry;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.Mod.EventHandler;
@@ -22,8 +22,8 @@ import org.lwjgl.input.Keyboard;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Set; // <-- Import Set
-import java.util.concurrent.ConcurrentHashMap; // <-- Import ConcurrentHashMap
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Mod(modid = Oronyx.MODID, name = Oronyx.NAME, version = Oronyx.VERSION,
@@ -32,7 +32,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class Oronyx {
     public static final String MODID = "oronyx";
     public static final String NAME = "Oronyx";
-    public static final String VERSION = "1.1.5-Beta";
+    public static final String VERSION = "1.1.6-Beta";
 
     @Mod.Instance(MODID)
     public static Oronyx instance;
@@ -86,7 +86,7 @@ public class Oronyx {
     // --- ---
 
     // Results list (thread-safe for updates/reads)
-    private List<ProfitableItem> lastProfitableItems = new CopyOnWriteArrayList<>();
+    private final List<ProfitableItem> lastProfitableItems = new CopyOnWriteArrayList<>();
 
     @EventHandler
     public void preInit(FMLPreInitializationEvent event) {
