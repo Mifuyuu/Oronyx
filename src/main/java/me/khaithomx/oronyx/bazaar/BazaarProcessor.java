@@ -300,7 +300,7 @@ public class BazaarProcessor {
         }
         // --- End Send Chat Messages ---
 
-        return finalItemList; // Return the final, sorted, and potentially limited list
+        return finalItemList;
     }
 
 

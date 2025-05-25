@@ -23,7 +23,6 @@ public class ModConfig {
     public static final String CATEGORY_VOLUME = "volume_filters";
     public static final String CATEGORY_PURSE = "purse_settings";
     public static final String CATEGORY_API = "api_settings";
-    // Removed CATEGORY_BLACKLIST
 
     /**
      * Initializes the configuration object. Called during PreInit.
@@ -130,6 +129,7 @@ public class ModConfig {
             Oronyx.LOGGER.info("Configuration saved due to changes or defaults applied.");
         }
     }
+
 
     /**
      * Populates the in-memory blacklist set from the loaded config array.
